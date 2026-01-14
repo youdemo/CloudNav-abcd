@@ -8,6 +8,7 @@ export interface LinkItem {
   createdAt: number;
   pinned?: boolean; // New field for pinning
   pinnedOrder?: number; // Field for pinned link sorting order
+  order?: number; // Field for link sorting order within category
 }
 
 export interface Category {
@@ -21,7 +22,7 @@ export interface SiteSettings {
   title: string;
   navTitle: string;
   favicon: string;
-  cardStyle: 'detailed' | 'simple';
+  cardStyle: 'detailed' | 'simple' | 'list';
   passwordExpiryDays: number; // 密码过期天数，0表示永久不退出
 }
 

@@ -133,6 +133,9 @@ function App() {
   // Batch Edit State
   const [isBatchEditMode, setIsBatchEditMode] = useState(false); // 是否处于批量编辑模式
   const [selectedLinks, setSelectedLinks] = useState<Set<string>>(new Set()); // 选中的链接ID集合
+
+  // List View Sub-category State (板块筛选)
+  const [selectedSubCategory, setSelectedSubCategory] = useState<string>('all'); // 'all' 或具体板块名
   
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{
@@ -735,7 +738,7 @@ function App() {
   };
 
   // 视图模式切换处理函数
-  const handleViewModeChange = (cardStyle: 'detailed' | 'simple') => {
+  const handleViewModeChange = (cardStyle: 'detailed' | 'simple' | 'list') => {
     const newSiteSettings = { ...siteSettings, cardStyle };
     setSiteSettings(newSiteSettings);
     localStorage.setItem('cloudnav_site_settings', JSON.stringify(newSiteSettings));
@@ -1697,17 +1700,37 @@ function App() {
       });
   }, [links, categories, unlockedCategoryIds]);
 
+  // 提取当前分类下的所有板块（从 description 中提取，格式如 "开发调优 收藏 2026-01-14"）
+  const subCategories = useMemo(() => {
+    if (selectedCategory === 'all') return [];
+
+    const categoryLinks = links.filter(l => l.categoryId === selectedCategory && !isCategoryLocked(l.categoryId));
+    const subCatSet = new Set<string>();
+
+    categoryLinks.forEach(link => {
+      if (link.description) {
+        // 从 description 中提取板块名（格式：板块名 收藏 日期）
+        const match = link.description.match(/^(.+?)\s+收藏\s+\d{4}-\d{2}-\d{2}$/);
+        if (match && match[1]) {
+          subCatSet.add(match[1].trim());
+        }
+      }
+    });
+
+    return Array.from(subCatSet).sort();
+  }, [links, selectedCategory, categories, unlockedCategoryIds]);
+
   const displayedLinks = useMemo(() => {
     let result = links;
-    
+
     // Security Filter: Always hide links from locked categories
     result = result.filter(l => !isCategoryLocked(l.categoryId));
 
     // Search Filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(l => 
-        l.title.toLowerCase().includes(q) || 
+      result = result.filter(l =>
+        l.title.toLowerCase().includes(q) ||
         l.url.toLowerCase().includes(q) ||
         (l.description && l.description.toLowerCase().includes(q))
       );
@@ -1717,7 +1740,16 @@ function App() {
     if (selectedCategory !== 'all') {
       result = result.filter(l => l.categoryId === selectedCategory);
     }
-    
+
+    // Sub-category Filter (板块筛选，仅在列表模式下生效)
+    if (siteSettings.cardStyle === 'list' && selectedSubCategory !== 'all' && selectedCategory !== 'all') {
+      result = result.filter(l => {
+        if (!l.description) return false;
+        const match = l.description.match(/^(.+?)\s+收藏\s+\d{4}-\d{2}-\d{2}$/);
+        return match && match[1] && match[1].trim() === selectedSubCategory;
+      });
+    }
+
     // 按照order字段排序，如果没有order字段则按创建时间排序
     // 修改排序逻辑：order值越大排在越前面，新增的卡片order值最大，会排在最前面
     // 我们需要反转这个排序，让新增的卡片(order值最大)排在最后面
@@ -1727,7 +1759,7 @@ function App() {
       // 改为升序排序，这样order值小(旧卡片)的排在前面，order值大(新卡片)的排在后面
       return aOrder - bOrder;
     });
-  }, [links, selectedCategory, searchQuery, categories, unlockedCategoryIds]);
+  }, [links, selectedCategory, searchQuery, categories, unlockedCategoryIds, selectedSubCategory, siteSettings.cardStyle]);
 
 
   // --- Render Components ---
@@ -1805,21 +1837,24 @@ function App() {
 
   const renderLinkCard = (link: LinkItem) => {
     const isSelected = selectedLinks.has(link.id);
-    
+
     // 根据视图模式决定卡片样式
     const isDetailedView = siteSettings.cardStyle === 'detailed';
-    
+    const isListView = siteSettings.cardStyle === 'list';
+
     return (
       <div
         key={link.id}
         className={`group relative transition-all duration-200 hover:shadow-lg hover:shadow-blue-100/50 dark:hover:shadow-blue-900/20 ${
-          isSelected 
-            ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800' 
+          isSelected
+            ? 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800'
             : 'bg-white dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 border-slate-200 dark:border-slate-700'
         } ${isBatchEditMode ? 'cursor-pointer' : ''} ${
-          isDetailedView 
-            ? 'flex flex-col rounded-2xl border shadow-sm p-4 min-h-[100px] hover:border-blue-400 dark:hover:border-blue-500' 
-            : 'flex items-center justify-between rounded-xl border shadow-sm p-3 hover:border-blue-300 dark:hover:border-blue-600'
+          isListView
+            ? 'flex items-center justify-between rounded-lg border shadow-sm p-3 hover:border-blue-300 dark:hover:border-blue-600'
+            : isDetailedView
+              ? 'flex flex-col rounded-2xl border shadow-sm p-4 min-h-[100px] hover:border-blue-400 dark:hover:border-blue-500'
+              : 'flex items-center justify-between rounded-xl border shadow-sm p-3 hover:border-blue-300 dark:hover:border-blue-600'
         }`}
         onClick={() => isBatchEditMode && toggleLinkSelection(link.id)}
         onContextMenu={(e) => handleContextMenu(e, link)}
@@ -1827,25 +1862,39 @@ function App() {
         {/* 链接内容 - 在批量编辑模式下不使用a标签 */}
         {isBatchEditMode ? (
           <div className={`flex flex-1 min-w-0 overflow-hidden h-full ${
-            isDetailedView ? 'flex-col' : 'items-center'
+            isListView ? 'items-center gap-4' : isDetailedView ? 'flex-col' : 'items-center'
           }`}>
             {/* 第一行：图标和标题水平排列 */}
-            <div className={`flex items-center gap-3 w-full`}>
+            <div className={`flex items-center gap-3 ${isListView ? 'flex-shrink-0' : 'w-full'}`}>
               {/* Icon */}
               <div className={`text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm font-bold uppercase shrink-0 ${
-                isDetailedView ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800' : 'w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-700'
+                isListView ? 'w-6 h-6 rounded-md bg-slate-50 dark:bg-slate-700' : isDetailedView ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800' : 'w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-700'
               }`}>
-                  {link.icon ? <img src={link.icon} alt="" className="w-5 h-5"/> : link.title.charAt(0)}
+                  {link.icon ? <img src={link.icon} alt="" className={isListView ? 'w-4 h-4' : 'w-5 h-5'}/> : link.title.charAt(0)}
               </div>
-              
+
               {/* 标题 */}
               <h3 className={`text-slate-900 dark:text-slate-100 truncate overflow-hidden text-ellipsis ${
-                isDetailedView ? 'text-base' : 'text-sm font-medium text-slate-800 dark:text-slate-200'
+                isListView ? 'text-sm font-medium' : isDetailedView ? 'text-base' : 'text-sm font-medium text-slate-800 dark:text-slate-200'
               }`} title={link.title}>
                   {link.title}
               </h3>
             </div>
-            
+
+            {/* 列表视图：显示描述和URL */}
+            {isListView && (
+              <>
+                {link.description && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 min-w-0">
+                    {link.description}
+                  </span>
+                )}
+                <span className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[200px] hidden md:block">
+                  {link.url}
+                </span>
+              </>
+            )}
+
             {/* 第二行：描述文字 */}
             {isDetailedView && link.description && (
               <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">
@@ -1859,34 +1908,48 @@ function App() {
             target="_blank"
             rel="noopener noreferrer"
             className={`flex flex-1 min-w-0 overflow-hidden h-full ${
-              isDetailedView ? 'flex-col' : 'items-center'
+              isListView ? 'items-center gap-4' : isDetailedView ? 'flex-col' : 'items-center'
             }`}
             title={isDetailedView ? link.url : (link.description || link.url)} // 详情版视图只显示URL作为tooltip
           >
             {/* 第一行：图标和标题水平排列 */}
-            <div className={`flex items-center gap-3 w-full`}>
+            <div className={`flex items-center gap-3 ${isListView ? 'flex-shrink-0' : 'w-full'}`}>
               {/* Icon */}
               <div className={`text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm font-bold uppercase shrink-0 ${
-                isDetailedView ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800' : 'w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-700'
+                isListView ? 'w-6 h-6 rounded-md bg-slate-50 dark:bg-slate-700' : isDetailedView ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800' : 'w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-700'
               }`}>
-                  {link.icon ? <img src={link.icon} alt="" className="w-5 h-5"/> : link.title.charAt(0)}
+                  {link.icon ? <img src={link.icon} alt="" className={isListView ? 'w-4 h-4' : 'w-5 h-5'}/> : link.title.charAt(0)}
               </div>
-              
+
               {/* 标题 */}
                 <h3 className={`text-slate-800 dark:text-slate-200 truncate whitespace-nowrap overflow-hidden text-ellipsis group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${
-                  isDetailedView ? 'text-base' : 'text-sm font-medium'
+                  isListView ? 'text-sm font-medium' : isDetailedView ? 'text-base' : 'text-sm font-medium'
                 }`} title={link.title}>
                     {link.title}
                 </h3>
             </div>
-            
+
+            {/* 列表视图：显示描述和URL */}
+            {isListView && (
+              <>
+                {link.description && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 min-w-0">
+                    {link.description}
+                  </span>
+                )}
+                <span className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[200px] hidden md:block">
+                  {link.url}
+                </span>
+              </>
+            )}
+
             {/* 第二行：描述文字 */}
               {isDetailedView && link.description && (
                 <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">
                   {link.description}
                 </p>
               )}
-            {!isDetailedView && link.description && (
+            {!isDetailedView && !isListView && link.description && (
               <div className="tooltip-custom absolute left-0 -top-8 w-max max-w-[200px] bg-black text-white text-xs p-2 rounded opacity-0 invisible group-hover:visible group-hover:opacity-100 transition-all z-20 pointer-events-none truncate">
                 {link.description}
               </div>
@@ -1897,9 +1960,9 @@ function App() {
         {/* Hover Actions (Absolute Right) - 在批量编辑模式下隐藏 */}
         {!isBatchEditMode && (
           <div className={`flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-50 dark:bg-blue-900/20 backdrop-blur-sm rounded-md p-1 absolute ${
-            isDetailedView ? 'top-3 right-3' : 'top-1/2 -translate-y-1/2 right-2'
+            isListView ? 'top-1/2 -translate-y-1/2 right-2' : isDetailedView ? 'top-3 right-3' : 'top-1/2 -translate-y-1/2 right-2'
           }`}>
-              <button 
+              <button
                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEditingLink(link); setIsModalOpen(true); }}
                   className="p-1 text-slate-400 hover:text-blue-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-md"
                   title="编辑"
@@ -2319,6 +2382,17 @@ function App() {
               >
                 详情
               </button>
+              <button
+                onClick={() => handleViewModeChange('list')}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-all ${
+                  siteSettings.cardStyle === 'list'
+                    ? 'bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-400 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-800 dark:hover:text-slate-100'
+                }`}
+                title="列表版视图"
+              >
+                列表
+              </button>
             </div>
 
             {/* 主题切换按钮 - 移动端：搜索框展开时隐藏，桌面端始终显示 */}
@@ -2406,10 +2480,14 @@ function App() {
                                 items={pinnedLinks.map(link => link.id)}
                                 strategy={rectSortingStrategy}
                             >
-                                <div className={`grid gap-3 ${
-                                  siteSettings.cardStyle === 'detailed' 
-                                    ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' 
-                                    : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
+                                <div className={`${
+                                  siteSettings.cardStyle === 'list'
+                                    ? 'flex flex-col gap-2'
+                                    : `grid gap-3 ${
+                                        siteSettings.cardStyle === 'detailed'
+                                          ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+                                          : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
+                                      }`
                                 }`}>
                                     {pinnedLinks.map(link => (
                                         <SortableLinkCard key={link.id} link={link} />
@@ -2418,10 +2496,14 @@ function App() {
                             </SortableContext>
                         </DndContext>
                     ) : (
-                        <div className={`grid gap-3 ${
-                          siteSettings.cardStyle === 'detailed' 
-                            ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' 
-                            : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
+                        <div className={`${
+                          siteSettings.cardStyle === 'list'
+                            ? 'flex flex-col gap-2'
+                            : `grid gap-3 ${
+                                siteSettings.cardStyle === 'detailed'
+                                  ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+                                  : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
+                              }`
                         }`}>
                             {pinnedLinks.map(link => renderLinkCard(link))}
                         </div>
@@ -2563,6 +2645,56 @@ function App() {
                             </>
                         )}
                     </div>
+                 ) : siteSettings.cardStyle === 'list' && subCategories.length > 0 && selectedCategory !== 'all' ? (
+                    /* 列表模式左右分栏布局 */
+                    <div className="flex gap-4 h-[calc(100vh-220px)]">
+                      {/* 左侧板块列表 */}
+                      <div className="w-48 flex-shrink-0 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                        <div className="p-3 border-b border-slate-200 dark:border-slate-700">
+                          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">板块筛选</h3>
+                        </div>
+                        <div className="overflow-y-auto h-[calc(100%-48px)]">
+                          <button
+                            onClick={() => setSelectedSubCategory('all')}
+                            className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                              selectedSubCategory === 'all'
+                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border-l-2 border-blue-500'
+                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                            }`}
+                          >
+                            全部 ({links.filter(l => l.categoryId === selectedCategory && !isCategoryLocked(l.categoryId)).length})
+                          </button>
+                          {subCategories.map(subCat => {
+                            const count = links.filter(l => {
+                              if (l.categoryId !== selectedCategory || isCategoryLocked(l.categoryId)) return false;
+                              if (!l.description) return false;
+                              const match = l.description.match(/^(.+?)\s+收藏\s+\d{4}-\d{2}-\d{2}$/);
+                              return match && match[1] && match[1].trim() === subCat;
+                            }).length;
+                            return (
+                              <button
+                                key={subCat}
+                                onClick={() => setSelectedSubCategory(subCat)}
+                                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
+                                  selectedSubCategory === subCat
+                                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border-l-2 border-blue-500'
+                                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                                }`}
+                              >
+                                {subCat} ({count})
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 右侧链接列表 */}
+                      <div className="flex-1 overflow-y-auto">
+                        <div className="flex flex-col gap-2">
+                          {displayedLinks.map(link => renderLinkCard(link))}
+                        </div>
+                      </div>
+                    </div>
                  ) : (
                     isSortingMode === selectedCategory ? (
                         <DndContext
@@ -2574,10 +2706,14 @@ function App() {
                                 items={displayedLinks.map(link => link.id)}
                                 strategy={rectSortingStrategy}
                             >
-                                <div className={`grid gap-3 ${
-                                  siteSettings.cardStyle === 'detailed' 
-                                    ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' 
-                                    : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
+                                <div className={`${
+                                  siteSettings.cardStyle === 'list'
+                                    ? 'flex flex-col gap-2'
+                                    : `grid gap-3 ${
+                                        siteSettings.cardStyle === 'detailed'
+                                          ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+                                          : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
+                                      }`
                                 }`}>
                                     {displayedLinks.map(link => (
                                         <SortableLinkCard key={link.id} link={link} />
@@ -2586,10 +2722,14 @@ function App() {
                             </SortableContext>
                         </DndContext>
                     ) : (
-                        <div className={`grid gap-3 ${
-                          siteSettings.cardStyle === 'detailed' 
-                            ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6' 
-                            : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
+                        <div className={`${
+                          siteSettings.cardStyle === 'list'
+                            ? 'flex flex-col gap-2'
+                            : `grid gap-3 ${
+                                siteSettings.cardStyle === 'detailed'
+                                  ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+                                  : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
+                              }`
                         }`}>
                             {displayedLinks.map(link => renderLinkCard(link))}
                         </div>

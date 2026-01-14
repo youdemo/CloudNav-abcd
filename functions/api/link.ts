@@ -43,9 +43,22 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
     // 2. Fetch current data from KV
     const currentDataStr = await env.CLOUDNAV_KV.get('app_data');
     let currentData = { links: [], categories: [] };
-    
+
     if (currentDataStr) {
         currentData = JSON.parse(currentDataStr);
+    }
+
+    // 2.5 Check for duplicate URL
+    const existingLink = currentData.links.find((link: any) => link.url === newLinkData.url);
+    if (existingLink) {
+        return new Response(JSON.stringify({
+            error: '该链接已存在',
+            duplicate: true,
+            existingLink: existingLink
+        }), {
+            status: 409,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
     }
 
     // 3. Determine Category
