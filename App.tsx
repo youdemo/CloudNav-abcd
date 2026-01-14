@@ -52,7 +52,14 @@ function App() {
   // --- State ---
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  // 从 URL 参数或 localStorage 恢复分类
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const catFromUrl = urlParams.get('cat');
+    if (catFromUrl) return catFromUrl;
+    const saved = localStorage.getItem('cloudnav_selected_category');
+    return saved || 'all';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -463,6 +470,19 @@ function App() {
   };
 
   // --- Effects ---
+
+  // 保存当前分类到 localStorage 和 URL
+  useEffect(() => {
+    localStorage.setItem('cloudnav_selected_category', selectedCategory);
+    // 更新 URL 参数（不刷新页面）
+    const url = new URL(window.location.href);
+    if (selectedCategory === 'all') {
+      url.searchParams.delete('cat');
+    } else {
+      url.searchParams.set('cat', selectedCategory);
+    }
+    window.history.replaceState({}, '', url.toString());
+  }, [selectedCategory]);
 
   useEffect(() => {
     // Theme init
@@ -1900,25 +1920,25 @@ function App() {
               <>
                 {/* 序号 */}
                 {index !== undefined && (
-                  <span className="text-xs text-slate-400 dark:text-slate-500 w-6 text-center flex-shrink-0 font-mono">
+                  <span className="text-xm text-slate-400 dark:text-slate-500 w-6 text-center flex-shrink-0 font-mono">
                     {index + 1}
                   </span>
                 )}
                 {/* 日期 */}
-                <span className="text-xs text-blue-500 dark:text-blue-400 flex-shrink-0 font-mono">
+                <span className="text-xm text-blue-500 dark:text-blue-400 flex-shrink-0 font-mono">
                   [{formatDate(link.createdAt)}]
                 </span>
                 {/* 图标 */}
                 <div className="w-5 h-5 rounded flex items-center justify-center text-blue-600 dark:text-blue-400 flex-shrink-0">
-                  {link.icon ? <img src={link.icon} alt="" className="w-4 h-4"/> : <span className="text-xs font-bold">{link.title.charAt(0)}</span>}
+                  {link.icon ? <img src={link.icon} alt="" className="w-4 h-4"/> : <span className="text-xm font-bold">{link.title.charAt(0)}</span>}
                 </div>
                 {/* 标题 */}
-                <h3 className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate flex-shrink-0 max-w-[300px]" title={link.title}>
+                <h3 className="text-xm font-medium text-slate-800 dark:text-slate-200 truncate flex-shrink-0 max-w-[300px]" title={link.title}>
                   {link.title}
                 </h3>
                 {/* 描述 */}
                 {link.description && (
-                  <span className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 min-w-0">
+                  <span className="text-xm text-slate-500 dark:text-slate-400 truncate flex-1 min-w-0">
                     {link.description}
                   </span>
                 )}
@@ -1966,7 +1986,7 @@ function App() {
               <>
                 {/* 序号 */}
                 {index !== undefined && (
-                  <span className="text-xs text-slate-400 dark:text-slate-500 w-6 text-center flex-shrink-0 font-mono">
+                  <span className="text-xm text-slate-400 dark:text-slate-500 w-6 text-center flex-shrink-0 font-mono">
                     {index + 1}
                   </span>
                 )}
