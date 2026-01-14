@@ -52,13 +52,10 @@ function App() {
   // --- State ---
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  // 从 URL 参数或 localStorage 恢复分类
+  // 从 URL 参数恢复分类（不再使用 localStorage）
   const [selectedCategory, setSelectedCategory] = useState<string>(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    const catFromUrl = urlParams.get('cat');
-    if (catFromUrl) return catFromUrl;
-    const saved = localStorage.getItem('cloudnav_selected_category');
-    return saved || 'all';
+    return urlParams.get('cat') || 'all';
   });
   const [searchQuery, setSearchQuery] = useState('');
   const [darkMode, setDarkMode] = useState(false);
@@ -96,8 +93,14 @@ function App() {
       };
   });
 
-  // Site Settings State - 从 URL 参数恢复视图模式
+  // Site Settings State - 从 URL 参数恢复视图模式（不再使用 localStorage 存储 cardStyle）
   const [siteSettings, setSiteSettings] = useState(() => {
+      // 先从 URL 获取视图模式
+      const urlParams = new URLSearchParams(window.location.search);
+      const viewFromUrl = urlParams.get('view');
+      const catFromUrl = urlParams.get('cat');
+
+      // 从 localStorage 获取其他设置（不包括 cardStyle）
       const saved = localStorage.getItem('cloudnav_site_settings');
       let settings = {
           title: 'CloudNav - 我的导航',
@@ -109,15 +112,17 @@ function App() {
 
       if (saved) {
           try {
-              settings = JSON.parse(saved);
+              const parsed = JSON.parse(saved);
+              settings = { ...settings, ...parsed };
           } catch (e) {}
       }
 
-      // URL 参数优先级最高，覆盖 localStorage
-      const urlParams = new URLSearchParams(window.location.search);
-      const viewFromUrl = urlParams.get('view');
+      // URL 参数优先级最高
       if (viewFromUrl && ['detailed', 'simple', 'list'].includes(viewFromUrl)) {
           settings.cardStyle = viewFromUrl as 'detailed' | 'simple' | 'list';
+      } else if (catFromUrl === '1764741520433') {
+          // LinuxDo好帖分类默认列表视图
+          settings.cardStyle = 'list';
       }
 
       return settings;
@@ -481,34 +486,20 @@ function App() {
 
   // --- Effects ---
 
-  // 保存当前分类和视图模式到 localStorage 和 URL
+  // 只更新 URL 参数（不使用 localStorage 存储分类和视图）
   useEffect(() => {
-    localStorage.setItem('cloudnav_selected_category', selectedCategory);
-    // 更新 URL 参数（不刷新页面）
     const url = new URL(window.location.href);
     if (selectedCategory === 'all') {
       url.searchParams.delete('cat');
     } else {
       url.searchParams.set('cat', selectedCategory);
     }
-    // 保存视图模式到 URL
     url.searchParams.set('view', siteSettings.cardStyle);
     window.history.replaceState({}, '', url.toString());
   }, [selectedCategory, siteSettings.cardStyle]);
 
-  // LinuxDo好帖分类ID - 移到顶部以便在初始化时使用
+  // LinuxDo好帖分类ID
   const LINUXDO_CATEGORY_ID = '1764741520433';
-
-  // 初始化时检查是否是 LinuxDo好帖分类，如果 URL 中没有 view 参数则切换到列表视图
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const viewFromUrl = urlParams.get('view');
-    // 只有当 URL 中没有 view 参数时，才自动切换
-    if (!viewFromUrl && selectedCategory === LINUXDO_CATEGORY_ID && siteSettings.cardStyle !== 'list') {
-      const newSiteSettings = { ...siteSettings, cardStyle: 'list' as const };
-      setSiteSettings(newSiteSettings);
-    }
-  }, []); // 只在初始化时执行一次
 
   useEffect(() => {
     // Theme init
