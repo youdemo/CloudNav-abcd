@@ -136,6 +136,10 @@ function App() {
 
   // List View Sub-category State (板块筛选)
   const [selectedSubCategory, setSelectedSubCategory] = useState<string>('all'); // 'all' 或具体板块名
+
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 13;
   
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{
@@ -1728,11 +1732,14 @@ function App() {
   const subCategories = useMemo(() => {
     if (selectedCategory === 'all') return [];
 
+    // 无效的描述列表（不作为板块显示）
+    const invalidDescriptions = ['生成描述失败', ''];
+
     const categoryLinks = links.filter(l => l.categoryId === selectedCategory && !isCategoryLocked(l.categoryId));
     const subCatSet = new Set<string>();
 
     categoryLinks.forEach(link => {
-      if (link.description && link.description.trim()) {
+      if (link.description && link.description.trim() && !invalidDescriptions.includes(link.description.trim())) {
         subCatSet.add(link.description.trim());
       }
     });
@@ -2715,7 +2722,7 @@ function App() {
                         </div>
                         <div className="overflow-y-auto h-[calc(100%-48px)]">
                           <button
-                            onClick={() => setSelectedSubCategory('all')}
+                            onClick={() => { setSelectedSubCategory('all'); setCurrentPage(1); }}
                             className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
                               selectedSubCategory === 'all'
                                 ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border-l-2 border-blue-500'
@@ -2727,14 +2734,12 @@ function App() {
                           {subCategories.map(subCat => {
                             const count = links.filter(l => {
                               if (l.categoryId !== selectedCategory || isCategoryLocked(l.categoryId)) return false;
-                              if (!l.description) return false;
-                              const match = l.description.match(/^(.+?)\s+收藏\s+\d{4}-\d{2}-\d{2}$/);
-                              return match && match[1] && match[1].trim() === subCat;
+                              return l.description && l.description.trim() === subCat;
                             }).length;
                             return (
                               <button
                                 key={subCat}
-                                onClick={() => setSelectedSubCategory(subCat)}
+                                onClick={() => { setSelectedSubCategory(subCat); setCurrentPage(1); }}
                                 className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
                                   selectedSubCategory === subCat
                                     ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium border-l-2 border-blue-500'
@@ -2749,10 +2754,46 @@ function App() {
                       </div>
 
                       {/* 右侧链接列表 */}
-                      <div className="flex-1 overflow-y-auto">
-                        <div className="flex flex-col gap-2">
-                          {displayedLinks.map((link, index) => renderLinkCard(link, index))}
+                      <div className="flex-1 flex flex-col">
+                        <div className="flex-1 overflow-y-auto">
+                          <div className="flex flex-col gap-2">
+                            {displayedLinks
+                              .slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+                              .map((link, index) => renderLinkCard(link, (currentPage - 1) * PAGE_SIZE + index))}
+                          </div>
                         </div>
+
+                        {/* 分页控件 */}
+                        {displayedLinks.length > PAGE_SIZE && (
+                          <div className="flex items-center justify-center gap-3 py-4 border-t border-slate-200 dark:border-slate-700 mt-4">
+                            <button
+                              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                              disabled={currentPage === 1}
+                              className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all ${
+                                currentPage === 1
+                                  ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg'
+                              }`}
+                            >
+                              上一页
+                            </button>
+                            <span className="text-sm text-slate-600 dark:text-slate-400 px-4">
+                              第 <span className="font-bold text-blue-600 dark:text-blue-400">{currentPage}</span> / {Math.ceil(displayedLinks.length / PAGE_SIZE)} 页
+                              <span className="ml-2 text-slate-400">（共 {displayedLinks.length} 条）</span>
+                            </span>
+                            <button
+                              onClick={() => setCurrentPage(p => Math.min(Math.ceil(displayedLinks.length / PAGE_SIZE), p + 1))}
+                              disabled={currentPage >= Math.ceil(displayedLinks.length / PAGE_SIZE)}
+                              className={`px-5 py-2.5 text-sm font-medium rounded-lg transition-all ${
+                                currentPage >= Math.ceil(displayedLinks.length / PAGE_SIZE)
+                                  ? 'bg-slate-100 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                                  : 'bg-blue-500 hover:bg-blue-600 text-white shadow-md hover:shadow-lg'
+                              }`}
+                            >
+                              下一页
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                  ) : (
