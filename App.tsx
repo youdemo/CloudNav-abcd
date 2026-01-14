@@ -1311,6 +1311,12 @@ function App() {
 
   // --- Category Management & Security ---
 
+  // LinuxDo好帖分类ID
+  const LINUXDO_CATEGORY_ID = '1764741520433';
+
+  // 保存切换到LinuxDo好帖之前的视图模式
+  const [previousCardStyle, setPreviousCardStyle] = useState<'detailed' | 'simple' | 'list' | null>(null);
+
   const handleCategoryClick = (cat: Category) => {
       // If category has password and is NOT unlocked
       if (cat.password && !unlockedCategoryIds.has(cat.id)) {
@@ -1318,7 +1324,25 @@ function App() {
           setSidebarOpen(false);
           return;
       }
+
+      // LinuxDo好帖分类默认使用列表视图
+      if (cat.id === LINUXDO_CATEGORY_ID) {
+          // 保存当前视图模式
+          if (selectedCategory !== LINUXDO_CATEGORY_ID) {
+              setPreviousCardStyle(siteSettings.cardStyle);
+          }
+          // 切换到列表视图
+          const newSiteSettings = { ...siteSettings, cardStyle: 'list' as const };
+          setSiteSettings(newSiteSettings);
+      } else if (selectedCategory === LINUXDO_CATEGORY_ID && previousCardStyle) {
+          // 从LinuxDo好帖切换到其他分类时，恢复之前的视图模式
+          const newSiteSettings = { ...siteSettings, cardStyle: previousCardStyle };
+          setSiteSettings(newSiteSettings);
+          setPreviousCardStyle(null);
+      }
+
       setSelectedCategory(cat.id);
+      setSelectedSubCategory('all'); // 重置板块筛选
       setSidebarOpen(false);
   };
 
@@ -1700,7 +1724,7 @@ function App() {
       });
   }, [links, categories, unlockedCategoryIds]);
 
-  // 提取当前分类下的所有板块（从 description 中提取，格式如 "开发调优 收藏 2026-01-14"）
+  // 提取当前分类下的所有板块（直接使用 description 作为板块名）
   const subCategories = useMemo(() => {
     if (selectedCategory === 'all') return [];
 
@@ -1708,12 +1732,8 @@ function App() {
     const subCatSet = new Set<string>();
 
     categoryLinks.forEach(link => {
-      if (link.description) {
-        // 从 description 中提取板块名（格式：板块名 收藏 日期）
-        const match = link.description.match(/^(.+?)\s+收藏\s+\d{4}-\d{2}-\d{2}$/);
-        if (match && match[1]) {
-          subCatSet.add(match[1].trim());
-        }
+      if (link.description && link.description.trim()) {
+        subCatSet.add(link.description.trim());
       }
     });
 
@@ -1744,9 +1764,7 @@ function App() {
     // Sub-category Filter (板块筛选，仅在列表模式下生效)
     if (siteSettings.cardStyle === 'list' && selectedSubCategory !== 'all' && selectedCategory !== 'all') {
       result = result.filter(l => {
-        if (!l.description) return false;
-        const match = l.description.match(/^(.+?)\s+收藏\s+\d{4}-\d{2}-\d{2}$/);
-        return match && match[1] && match[1].trim() === selectedSubCategory;
+        return l.description && l.description.trim() === selectedSubCategory;
       });
     }
 
@@ -1835,12 +1853,18 @@ function App() {
     );
   };
 
-  const renderLinkCard = (link: LinkItem) => {
+  const renderLinkCard = (link: LinkItem, index?: number) => {
     const isSelected = selectedLinks.has(link.id);
 
     // 根据视图模式决定卡片样式
     const isDetailedView = siteSettings.cardStyle === 'detailed';
     const isListView = siteSettings.cardStyle === 'list';
+
+    // 格式化日期
+    const formatDate = (timestamp: number) => {
+      const date = new Date(timestamp);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    };
 
     return (
       <div
@@ -1862,44 +1886,62 @@ function App() {
         {/* 链接内容 - 在批量编辑模式下不使用a标签 */}
         {isBatchEditMode ? (
           <div className={`flex flex-1 min-w-0 overflow-hidden h-full ${
-            isListView ? 'items-center gap-4' : isDetailedView ? 'flex-col' : 'items-center'
+            isListView ? 'items-center gap-3' : isDetailedView ? 'flex-col' : 'items-center'
           }`}>
-            {/* 第一行：图标和标题水平排列 */}
-            <div className={`flex items-center gap-3 ${isListView ? 'flex-shrink-0' : 'w-full'}`}>
-              {/* Icon */}
-              <div className={`text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm font-bold uppercase shrink-0 ${
-                isListView ? 'w-6 h-6 rounded-md bg-slate-50 dark:bg-slate-700' : isDetailedView ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800' : 'w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-700'
-              }`}>
-                  {link.icon ? <img src={link.icon} alt="" className={isListView ? 'w-4 h-4' : 'w-5 h-5'}/> : link.title.charAt(0)}
-              </div>
-
-              {/* 标题 */}
-              <h3 className={`text-slate-900 dark:text-slate-100 truncate overflow-hidden text-ellipsis ${
-                isListView ? 'text-sm font-medium' : isDetailedView ? 'text-base' : 'text-sm font-medium text-slate-800 dark:text-slate-200'
-              }`} title={link.title}>
-                  {link.title}
-              </h3>
-            </div>
-
-            {/* 列表视图：显示描述和URL */}
-            {isListView && (
+            {/* 列表视图：序号 [日期] 图标 标题 描述 */}
+            {isListView ? (
               <>
+                {/* 序号 */}
+                {index !== undefined && (
+                  <span className="text-xs text-slate-400 dark:text-slate-500 w-6 text-center flex-shrink-0 font-mono">
+                    {index + 1}
+                  </span>
+                )}
+                {/* 日期 */}
+                <span className="text-xs text-blue-500 dark:text-blue-400 flex-shrink-0 font-mono">
+                  [{formatDate(link.createdAt)}]
+                </span>
+                {/* 图标 */}
+                <div className="w-5 h-5 rounded flex items-center justify-center text-blue-600 dark:text-blue-400 flex-shrink-0">
+                  {link.icon ? <img src={link.icon} alt="" className="w-4 h-4"/> : <span className="text-xs font-bold">{link.title.charAt(0)}</span>}
+                </div>
+                {/* 标题 */}
+                <h3 className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate flex-shrink-0 max-w-[300px]" title={link.title}>
+                  {link.title}
+                </h3>
+                {/* 描述 */}
                 {link.description && (
                   <span className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 min-w-0">
                     {link.description}
                   </span>
                 )}
-                <span className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[200px] hidden md:block">
-                  {link.url}
-                </span>
               </>
-            )}
+            ) : (
+              <>
+                {/* 第一行：图标和标题水平排列 */}
+                <div className={`flex items-center gap-3 w-full`}>
+                  {/* Icon */}
+                  <div className={`text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm font-bold uppercase shrink-0 ${
+                    isDetailedView ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800' : 'w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-700'
+                  }`}>
+                      {link.icon ? <img src={link.icon} alt="" className="w-5 h-5"/> : link.title.charAt(0)}
+                  </div>
 
-            {/* 第二行：描述文字 */}
-            {isDetailedView && link.description && (
-              <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">
-                {link.description}
-              </p>
+                  {/* 标题 */}
+                  <h3 className={`text-slate-900 dark:text-slate-100 truncate overflow-hidden text-ellipsis ${
+                    isDetailedView ? 'text-base' : 'text-sm font-medium text-slate-800 dark:text-slate-200'
+                  }`} title={link.title}>
+                      {link.title}
+                  </h3>
+                </div>
+
+                {/* 第二行：描述文字 */}
+                {isDetailedView && link.description && (
+                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">
+                    {link.description}
+                  </p>
+                )}
+              </>
             )}
           </div>
         ) : (
@@ -1908,51 +1950,69 @@ function App() {
             target="_blank"
             rel="noopener noreferrer"
             className={`flex flex-1 min-w-0 overflow-hidden h-full ${
-              isListView ? 'items-center gap-4' : isDetailedView ? 'flex-col' : 'items-center'
+              isListView ? 'items-center gap-3' : isDetailedView ? 'flex-col' : 'items-center'
             }`}
-            title={isDetailedView ? link.url : (link.description || link.url)} // 详情版视图只显示URL作为tooltip
+            title={isDetailedView ? link.url : (link.description || link.url)}
           >
-            {/* 第一行：图标和标题水平排列 */}
-            <div className={`flex items-center gap-3 ${isListView ? 'flex-shrink-0' : 'w-full'}`}>
-              {/* Icon */}
-              <div className={`text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm font-bold uppercase shrink-0 ${
-                isListView ? 'w-6 h-6 rounded-md bg-slate-50 dark:bg-slate-700' : isDetailedView ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800' : 'w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-700'
-              }`}>
-                  {link.icon ? <img src={link.icon} alt="" className={isListView ? 'w-4 h-4' : 'w-5 h-5'}/> : link.title.charAt(0)}
-              </div>
-
-              {/* 标题 */}
-                <h3 className={`text-slate-800 dark:text-slate-200 truncate whitespace-nowrap overflow-hidden text-ellipsis group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${
-                  isListView ? 'text-sm font-medium' : isDetailedView ? 'text-base' : 'text-sm font-medium'
-                }`} title={link.title}>
-                    {link.title}
-                </h3>
-            </div>
-
-            {/* 列表视图：显示描述和URL */}
-            {isListView && (
+            {/* 列表视图：序号 [日期] 图标 标题 描述 */}
+            {isListView ? (
               <>
+                {/* 序号 */}
+                {index !== undefined && (
+                  <span className="text-xs text-slate-400 dark:text-slate-500 w-6 text-center flex-shrink-0 font-mono">
+                    {index + 1}
+                  </span>
+                )}
+                {/* 日期 */}
+                <span className="text-xs text-blue-500 dark:text-blue-400 flex-shrink-0 font-mono">
+                  [{formatDate(link.createdAt)}]
+                </span>
+                {/* 图标 */}
+                <div className="w-5 h-5 rounded flex items-center justify-center text-blue-600 dark:text-blue-400 flex-shrink-0">
+                  {link.icon ? <img src={link.icon} alt="" className="w-4 h-4"/> : <span className="text-xs font-bold">{link.title.charAt(0)}</span>}
+                </div>
+                {/* 标题 */}
+                <h3 className="text-sm font-medium text-slate-800 dark:text-slate-200 truncate flex-shrink-0 max-w-[300px] group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" title={link.title}>
+                  {link.title}
+                </h3>
+                {/* 描述 */}
                 {link.description && (
                   <span className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 min-w-0">
                     {link.description}
                   </span>
                 )}
-                <span className="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[200px] hidden md:block">
-                  {link.url}
-                </span>
               </>
-            )}
+            ) : (
+              <>
+                {/* 第一行：图标和标题水平排列 */}
+                <div className={`flex items-center gap-3 w-full`}>
+                  {/* Icon */}
+                  <div className={`text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm font-bold uppercase shrink-0 ${
+                    isDetailedView ? 'w-8 h-8 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-700 dark:to-slate-800' : 'w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-700'
+                  }`}>
+                      {link.icon ? <img src={link.icon} alt="" className="w-5 h-5"/> : link.title.charAt(0)}
+                  </div>
 
-            {/* 第二行：描述文字 */}
-              {isDetailedView && link.description && (
-                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">
-                  {link.description}
-                </p>
-              )}
-            {!isDetailedView && !isListView && link.description && (
-              <div className="tooltip-custom absolute left-0 -top-8 w-max max-w-[200px] bg-black text-white text-xs p-2 rounded opacity-0 invisible group-hover:visible group-hover:opacity-100 transition-all z-20 pointer-events-none truncate">
-                {link.description}
-              </div>
+                  {/* 标题 */}
+                    <h3 className={`text-slate-800 dark:text-slate-200 truncate whitespace-nowrap overflow-hidden text-ellipsis group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${
+                      isDetailedView ? 'text-base' : 'text-sm font-medium'
+                    }`} title={link.title}>
+                        {link.title}
+                    </h3>
+                </div>
+
+                {/* 第二行：描述文字 */}
+                  {isDetailedView && link.description && (
+                    <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-2">
+                      {link.description}
+                    </p>
+                  )}
+                {!isDetailedView && !isListView && link.description && (
+                  <div className="tooltip-custom absolute left-0 -top-8 w-max max-w-[200px] bg-black text-white text-xs p-2 rounded opacity-0 invisible group-hover:visible group-hover:opacity-100 transition-all z-20 pointer-events-none truncate">
+                    {link.description}
+                  </div>
+                )}
+              </>
             )}
           </a>
         )}
@@ -2505,7 +2565,7 @@ function App() {
                                   : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
                               }`
                         }`}>
-                            {pinnedLinks.map(link => renderLinkCard(link))}
+                            {pinnedLinks.map((link, index) => renderLinkCard(link, index))}
                         </div>
                     )}
                 </section>
@@ -2691,7 +2751,7 @@ function App() {
                       {/* 右侧链接列表 */}
                       <div className="flex-1 overflow-y-auto">
                         <div className="flex flex-col gap-2">
-                          {displayedLinks.map(link => renderLinkCard(link))}
+                          {displayedLinks.map((link, index) => renderLinkCard(link, index))}
                         </div>
                       </div>
                     </div>
@@ -2731,7 +2791,7 @@ function App() {
                                   : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
                               }`
                         }`}>
-                            {displayedLinks.map(link => renderLinkCard(link))}
+                            {displayedLinks.map((link, index) => renderLinkCard(link, index))}
                         </div>
                     )
                  )}
