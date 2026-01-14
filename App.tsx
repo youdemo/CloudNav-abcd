@@ -98,15 +98,12 @@ function App() {
 
   // Site Settings State - 从 URL 参数恢复视图模式
   const [siteSettings, setSiteSettings] = useState(() => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const viewFromUrl = urlParams.get('view') as 'detailed' | 'simple' | 'list' | null;
-
       const saved = localStorage.getItem('cloudnav_site_settings');
       let settings = {
           title: 'CloudNav - 我的导航',
           navTitle: 'CloudNav',
           favicon: '',
-          cardStyle: 'detailed' as const,
+          cardStyle: 'detailed' as 'detailed' | 'simple' | 'list',
           passwordExpiryDays: 7
       };
 
@@ -116,9 +113,11 @@ function App() {
           } catch (e) {}
       }
 
-      // URL 参数优先
+      // URL 参数优先级最高，覆盖 localStorage
+      const urlParams = new URLSearchParams(window.location.search);
+      const viewFromUrl = urlParams.get('view');
       if (viewFromUrl && ['detailed', 'simple', 'list'].includes(viewFromUrl)) {
-          settings.cardStyle = viewFromUrl;
+          settings.cardStyle = viewFromUrl as 'detailed' | 'simple' | 'list';
       }
 
       return settings;
@@ -157,7 +156,7 @@ function App() {
 
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 13;
+  const PAGE_SIZE = 10;
   
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{
