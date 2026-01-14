@@ -632,14 +632,31 @@ function App() {
             if (websiteConfigRes.ok) {
                 const websiteConfigData = await websiteConfigRes.json();
                 if (websiteConfigData) {
-                    setSiteSettings(prev => ({
-                        ...prev,
-                        title: websiteConfigData.title || prev.title,
-                        navTitle: websiteConfigData.navTitle || prev.navTitle,
-                        favicon: websiteConfigData.favicon || prev.favicon,
-                        cardStyle: websiteConfigData.cardStyle || prev.cardStyle,
-                        passwordExpiryDays: websiteConfigData.passwordExpiryDays !== undefined ? websiteConfigData.passwordExpiryDays : prev.passwordExpiryDays
-                    }));
+                    // 获取 URL 参数，URL 参数优先级最高
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const viewFromUrl = urlParams.get('view');
+                    const catFromUrl = urlParams.get('cat');
+
+                    setSiteSettings(prev => {
+                        let cardStyle = websiteConfigData.cardStyle || prev.cardStyle;
+
+                        // URL 参数优先
+                        if (viewFromUrl && ['detailed', 'simple', 'list'].includes(viewFromUrl)) {
+                            cardStyle = viewFromUrl;
+                        } else if (catFromUrl === '1764741520433' && !viewFromUrl) {
+                            // LinuxDo好帖分类默认列表视图
+                            cardStyle = 'list';
+                        }
+
+                        return {
+                            ...prev,
+                            title: websiteConfigData.title || prev.title,
+                            navTitle: websiteConfigData.navTitle || prev.navTitle,
+                            favicon: websiteConfigData.favicon || prev.favicon,
+                            cardStyle: cardStyle,
+                            passwordExpiryDays: websiteConfigData.passwordExpiryDays !== undefined ? websiteConfigData.passwordExpiryDays : prev.passwordExpiryDays
+                        };
+                    });
                 }
             }
         } catch (e) {
@@ -874,14 +891,30 @@ function App() {
                 if (websiteConfigRes.ok) {
                     const websiteConfigData = await websiteConfigRes.json();
                     if (websiteConfigData) {
-                        setSiteSettings(prev => ({
-                            ...prev,
-                            title: websiteConfigData.title || prev.title,
-                            navTitle: websiteConfigData.navTitle || prev.navTitle,
-                            favicon: websiteConfigData.favicon || prev.favicon,
-                            cardStyle: websiteConfigData.cardStyle || prev.cardStyle,
-                            passwordExpiryDays: websiteConfigData.passwordExpiryDays !== undefined ? websiteConfigData.passwordExpiryDays : prev.passwordExpiryDays
-                        }));
+                        // 获取 URL 参数，URL 参数优先级最高
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const viewFromUrl = urlParams.get('view');
+                        const catFromUrl = urlParams.get('cat');
+
+                        setSiteSettings(prev => {
+                            let cardStyle = websiteConfigData.cardStyle || prev.cardStyle;
+
+                            // URL 参数优先
+                            if (viewFromUrl && ['detailed', 'simple', 'list'].includes(viewFromUrl)) {
+                                cardStyle = viewFromUrl;
+                            } else if (catFromUrl === '1764741520433' && !viewFromUrl) {
+                                cardStyle = 'list';
+                            }
+
+                            return {
+                                ...prev,
+                                title: websiteConfigData.title || prev.title,
+                                navTitle: websiteConfigData.navTitle || prev.navTitle,
+                                favicon: websiteConfigData.favicon || prev.favicon,
+                                cardStyle: cardStyle,
+                                passwordExpiryDays: websiteConfigData.passwordExpiryDays !== undefined ? websiteConfigData.passwordExpiryDays : prev.passwordExpiryDays
+                            };
+                        });
                     }
                 }
             } catch (e) {
