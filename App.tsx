@@ -484,6 +484,17 @@ function App() {
     window.history.replaceState({}, '', url.toString());
   }, [selectedCategory]);
 
+  // LinuxDo好帖分类ID - 移到顶部以便在初始化时使用
+  const LINUXDO_CATEGORY_ID = '1764741520433';
+
+  // 初始化时检查是否是 LinuxDo好帖分类，如果是则切换到列表视图
+  useEffect(() => {
+    if (selectedCategory === LINUXDO_CATEGORY_ID && siteSettings.cardStyle !== 'list') {
+      const newSiteSettings = { ...siteSettings, cardStyle: 'list' as const };
+      setSiteSettings(newSiteSettings);
+    }
+  }, []); // 只在初始化时执行一次
+
   useEffect(() => {
     // Theme init
     if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
@@ -1335,9 +1346,6 @@ function App() {
 
   // --- Category Management & Security ---
 
-  // LinuxDo好帖分类ID
-  const LINUXDO_CATEGORY_ID = '1764741520433';
-
   // 保存切换到LinuxDo好帖之前的视图模式
   const [previousCardStyle, setPreviousCardStyle] = useState<'detailed' | 'simple' | 'list' | null>(null);
 
@@ -1991,7 +1999,7 @@ function App() {
                   </span>
                 )}
                 {/* 日期 */}
-                <span className="text-xs text-blue-500 dark:text-blue-400 flex-shrink-0 font-mono">
+                <span className="text-xm text-blue-500 dark:text-blue-400 flex-shrink-0 font-mono">
                   [{formatDate(link.createdAt)}]
                 </span>
                 {/* 图标 */}
