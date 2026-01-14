@@ -63,12 +63,12 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  
+
   // Search Mode State
   const [searchMode, setSearchMode] = useState<SearchMode>('external');
   const [externalSearchSources, setExternalSearchSources] = useState<ExternalSearchSource[]>([]);
   const [isLoadingSearchConfig, setIsLoadingSearchConfig] = useState(true);
-  
+
   // Category Security State
   const [unlockedCategoryIds, setUnlockedCategoryIds] = useState<Set<string>>(new Set());
 
@@ -90,27 +90,38 @@ function App() {
       }
       return {
           provider: 'gemini',
-          apiKey: process.env.API_KEY || '', 
+          apiKey: process.env.API_KEY || '',
           baseUrl: '',
           model: 'gemini-2.5-flash'
       };
   });
 
-  // Site Settings State
+  // Site Settings State - 从 URL 参数恢复视图模式
   const [siteSettings, setSiteSettings] = useState(() => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const viewFromUrl = urlParams.get('view') as 'detailed' | 'simple' | 'list' | null;
+
       const saved = localStorage.getItem('cloudnav_site_settings');
-      if (saved) {
-          try {
-              return JSON.parse(saved);
-          } catch (e) {}
-      }
-      return {
+      let settings = {
           title: 'CloudNav - 我的导航',
           navTitle: 'CloudNav',
           favicon: '',
           cardStyle: 'detailed' as const,
           passwordExpiryDays: 7
       };
+
+      if (saved) {
+          try {
+              settings = JSON.parse(saved);
+          } catch (e) {}
+      }
+
+      // URL 参数优先
+      if (viewFromUrl && ['detailed', 'simple', 'list'].includes(viewFromUrl)) {
+          settings.cardStyle = viewFromUrl;
+      }
+
+      return settings;
   });
   
   // Modals
@@ -471,7 +482,7 @@ function App() {
 
   // --- Effects ---
 
-  // 保存当前分类到 localStorage 和 URL
+  // 保存当前分类和视图模式到 localStorage 和 URL
   useEffect(() => {
     localStorage.setItem('cloudnav_selected_category', selectedCategory);
     // 更新 URL 参数（不刷新页面）
@@ -481,15 +492,20 @@ function App() {
     } else {
       url.searchParams.set('cat', selectedCategory);
     }
+    // 保存视图模式到 URL
+    url.searchParams.set('view', siteSettings.cardStyle);
     window.history.replaceState({}, '', url.toString());
-  }, [selectedCategory]);
+  }, [selectedCategory, siteSettings.cardStyle]);
 
   // LinuxDo好帖分类ID - 移到顶部以便在初始化时使用
   const LINUXDO_CATEGORY_ID = '1764741520433';
 
-  // 初始化时检查是否是 LinuxDo好帖分类，如果是则切换到列表视图
+  // 初始化时检查是否是 LinuxDo好帖分类，如果 URL 中没有 view 参数则切换到列表视图
   useEffect(() => {
-    if (selectedCategory === LINUXDO_CATEGORY_ID && siteSettings.cardStyle !== 'list') {
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewFromUrl = urlParams.get('view');
+    // 只有当 URL 中没有 view 参数时，才自动切换
+    if (!viewFromUrl && selectedCategory === LINUXDO_CATEGORY_ID && siteSettings.cardStyle !== 'list') {
       const newSiteSettings = { ...siteSettings, cardStyle: 'list' as const };
       setSiteSettings(newSiteSettings);
     }
