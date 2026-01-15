@@ -1112,7 +1112,7 @@ function App() {
 
     if (over && active.id !== over.id) {
       // 获取当前分类下的所有链接
-      const categoryLinks = links.filter(link => 
+      const categoryLinks: LinkItem[] = links.filter((link: LinkItem) => 
         selectedCategory === 'all' || link.categoryId === selectedCategory
       );
       
@@ -1134,7 +1134,7 @@ function App() {
         });
         
         // 按照order字段重新排序
-        updatedLinks.sort((a, b) => (a.order || 0) - (b.order || 0));
+        updatedLinks.sort((a: LinkItem, b: LinkItem) => (a.order || 0) - (b.order || 0));
         
         updateData(updatedLinks, categories);
       }
@@ -1147,7 +1147,7 @@ function App() {
 
     if (over && active.id !== over.id) {
       // 获取所有置顶链接
-      const pinnedLinksList = links.filter(link => link.pinned);
+      const pinnedLinksList: LinkItem[] = links.filter((link: LinkItem) => link.pinned);
       
       // 找到被拖拽元素和目标元素的索引
       const activeIndex = pinnedLinksList.findIndex(link => link.id === active.id);
@@ -1159,7 +1159,7 @@ function App() {
         
         // 创建一个映射，存储每个置顶链接的新pinnedOrder
         const pinnedOrderMap = new Map<string, number>();
-        reorderedPinnedLinks.forEach((link, index) => {
+        reorderedPinnedLinks.forEach((link: LinkItem, index: number) => {
           pinnedOrderMap.set(link.id, index);
         });
         
@@ -1834,7 +1834,7 @@ function App() {
   // --- Render Components ---
 
   // 创建可排序的链接卡片组件
-  const SortableLinkCard = ({ link }: { link: LinkItem }) => {
+  const SortableLinkCard: React.FC<{ link: LinkItem }> = ({ link }) => {
     const {
       attributes,
       listeners,
@@ -2590,7 +2590,7 @@ function App() {
                             onDragEnd={handlePinnedDragEnd}
                         >
                             <SortableContext
-                                items={pinnedLinks.map(link => link.id)}
+                                items={pinnedLinks.map((link: LinkItem) => link.id)}
                                 strategy={rectSortingStrategy}
                             >
                                 <div className={`${
@@ -2602,7 +2602,7 @@ function App() {
                                           : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
                                       }`
                                 }`}>
-                                    {pinnedLinks.map(link => (
+                                    {pinnedLinks.map((link: LinkItem) => (
                                         <SortableLinkCard key={link.id} link={link} />
                                     ))}
                                 </div>
@@ -2618,7 +2618,7 @@ function App() {
                                   : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
                               }`
                         }`}>
-                            {pinnedLinks.map((link, index) => renderLinkCard(link, index))}
+                            {pinnedLinks.map((link: LinkItem, index: number) => renderLinkCard(link, index))}
                         </div>
                     )}
                 </section>
@@ -2850,7 +2850,7 @@ function App() {
                             onDragEnd={handleDragEnd}
                         >
                             <SortableContext
-                                items={displayedLinks.map(link => link.id)}
+                                items={displayedLinks.map((link: LinkItem) => link.id)}
                                 strategy={rectSortingStrategy}
                             >
                                 <div className={`${
@@ -2862,7 +2862,7 @@ function App() {
                                           : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
                                       }`
                                 }`}>
-                                    {displayedLinks.map(link => (
+                                    {displayedLinks.map((link: LinkItem) => (
                                         <SortableLinkCard key={link.id} link={link} />
                                     ))}
                                 </div>
@@ -2878,7 +2878,7 @@ function App() {
                                   : 'grid-cols-2 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8'
                               }`
                         }`}>
-                            {displayedLinks.map((link, index) => renderLinkCard(link, index))}
+                            {displayedLinks.map((link: LinkItem, index: number) => renderLinkCard(link, index))}
                         </div>
                     )
                  )}
