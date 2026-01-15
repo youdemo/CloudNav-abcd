@@ -1911,10 +1911,12 @@ function App() {
     const isDetailedView = siteSettings.cardStyle === 'detailed';
     const isListView = siteSettings.cardStyle === 'list';
 
-    // 格式化日期
+    // 格式化日期（包含时间）
     const formatDate = (timestamp: number) => {
       const date = new Date(timestamp);
-      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+      const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      return `${dateStr} ${timeStr}`;
     };
 
     return (
