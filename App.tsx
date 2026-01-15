@@ -1072,53 +1072,20 @@ function App() {
       processedUrl = 'https://' + processedUrl;
     }
     
-    // 获取当前分类下的所有链接（不包括置顶链接）
-    const categoryLinks = links.filter(link => 
-      !link.pinned && (data.categoryId === 'all' || link.categoryId === data.categoryId)
-    );
-    
-    // 计算新链接的order值，使其排在分类最后
-    const maxOrder = categoryLinks.length > 0 
-      ? Math.max(...categoryLinks.map(link => link.order || 0))
-      : -1;
-    
+    // 新添加的链接不设置order字段，这样它会按createdAt时间排序（最新在前）
+    // 只有用户手动拖动排序后才会有order字段
     const newLink: LinkItem = {
       ...data,
-      url: processedUrl, // 使用处理后的URL
+      url: processedUrl,
       id: Date.now().toString(),
       createdAt: Date.now(),
-      order: maxOrder + 1, // 设置为当前分类的最大order值+1，确保排在最后
+      // 不设置order字段，新链接将按时间排序
       // 如果是置顶链接，设置pinnedOrder为当前置顶链接数量
       pinnedOrder: data.pinned ? links.filter(l => l.pinned).length : undefined
     };
     
-    // 将新链接插入到合适的位置，而不是直接放在开头
-    // 如果是置顶链接，放在置顶链接区域的最后
-    if (newLink.pinned) {
-      const firstNonPinnedIndex = links.findIndex(link => !link.pinned);
-      if (firstNonPinnedIndex === -1) {
-        // 如果没有非置顶链接，直接添加到末尾
-        updateData([...links, newLink], categories);
-      } else {
-        // 插入到非置顶链接之前
-        const updatedLinks = [...links];
-        updatedLinks.splice(firstNonPinnedIndex, 0, newLink);
-        updateData(updatedLinks, categories);
-      }
-    } else {
-      // 非置顶链接，按照order字段排序后插入
-      const updatedLinks = [...links, newLink].sort((a, b) => {
-        // 置顶链接始终排在前面
-        if (a.pinned && !b.pinned) return -1;
-        if (!a.pinned && b.pinned) return 1;
-        
-        // 同类型链接按照order排序
-        const aOrder = a.order !== undefined ? a.order : a.createdAt;
-        const bOrder = b.order !== undefined ? b.order : b.createdAt;
-        return aOrder - bOrder;
-      });
-      updateData(updatedLinks, categories);
-    }
+    // 直接添加到链接列表，排序由displayedLinks处理
+    updateData([...links, newLink], categories);
     
     // Clear prefill if any
     setPrefillLink(undefined);
@@ -1842,14 +1809,24 @@ function App() {
       });
     }
 
-    // 按照order字段排序，如果没有order字段则按创建时间排序
-    // 修改排序逻辑：order值越大排在越前面，新增的卡片order值最大，会排在最前面
-    // 我们需要反转这个排序，让新增的卡片(order值最大)排在最后面
+    // 排序规则：
+    // 1. 有order的链接（手动拖动过）排在前面，按order升序
+    // 2. 没有order的链接（新添加的）排在后面，按createdAt倒序（最新在前）
     return result.sort((a, b) => {
-      const aOrder = a.order !== undefined ? a.order : a.createdAt;
-      const bOrder = b.order !== undefined ? b.order : b.createdAt;
-      // 改为升序排序，这样order值小(旧卡片)的排在前面，order值大(新卡片)的排在后面
-      return aOrder - bOrder;
+      const aHasOrder = a.order !== undefined;
+      const bHasOrder = b.order !== undefined;
+      
+      // 有order的排在前面
+      if (aHasOrder && !bHasOrder) return -1;
+      if (!aHasOrder && bHasOrder) return 1;
+      
+      // 都有order：按order升序
+      if (aHasOrder && bHasOrder) {
+        return a.order! - b.order!;
+      }
+      
+      // 都没有order：按createdAt倒序（最新在前）
+      return b.createdAt - a.createdAt;
     });
   }, [links, selectedCategory, searchQuery, categories, unlockedCategoryIds, selectedSubCategory, siteSettings.cardStyle]);
 
